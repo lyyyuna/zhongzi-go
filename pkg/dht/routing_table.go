@@ -29,7 +29,7 @@ func (r *RoutingTable) Add(newnode *Node) {
 	r.nodes.Set(newnode.Id, newnode, ttlcache.DefaultTTL)
 }
 
-func (r *RoutingTable) GetClosetNodes(targetId NodeId, count int) []*Node {
+func (r *RoutingTable) GetClosestNodes(targetId NodeId, count int) []*Node {
 	nodes := make([]*Node, 0)
 
 	for _, item := range r.nodes.Items() {
