@@ -10,6 +10,7 @@ import (
 )
 
 var g *Logger = NewLogger()
+var logFileName = "zhongzi.log"
 
 const (
 	Ldebug = iota
@@ -34,6 +35,13 @@ func SetDebugLevel() {
 // SetInfoLevel 调整为 info 模式，只打印必要的日志
 func SetInfoLevel() {
 	g.SetInfoLevel()
+}
+
+// SetLogFile 设置日志文件名
+func SetLogFile(filename string) {
+	if filename != "" {
+		logFileName = filename
+	}
 }
 
 func Fatalf(format string, v ...interface{}) {
@@ -90,8 +98,14 @@ type Logger struct {
 }
 
 func newLogger(debug bool) *zap.Logger {
+	// 创建日志文件
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		// 如果无法创建文件，回退到stderr
+		logFile = os.Stderr
+	}
 
-	consoleDebugging := zapcore.AddSync(os.Stderr)
+	fileWriter := zapcore.AddSync(logFile)
 
 	encoderConfig := zap.NewDevelopmentEncoderConfig()
 	encoderConfig.EncodeCaller = zapcore.FullCallerEncoder
@@ -102,9 +116,9 @@ func newLogger(debug bool) *zap.Logger {
 
 	var core zapcore.Core
 	if debug == true {
-		core = zapcore.NewCore(consoleEncoder, consoleDebugging, zap.NewAtomicLevelAt(zapcore.DebugLevel))
+		core = zapcore.NewCore(consoleEncoder, fileWriter, zap.NewAtomicLevelAt(zapcore.DebugLevel))
 	} else {
-		core = zapcore.NewCore(consoleEncoder, consoleDebugging, zap.NewAtomicLevelAt(zapcore.InfoLevel))
+		core = zapcore.NewCore(consoleEncoder, fileWriter, zap.NewAtomicLevelAt(zapcore.InfoLevel))
 
 	}
 
