@@ -10,27 +10,27 @@ import (
 )
 
 type RoutingTable struct {
-	nodes *ttlcache.Cache[NodeId, *Node]
+	nodes *ttlcache.Cache[NodeId, Node]
 }
 
 func NewRoutingTable() *RoutingTable {
 	r := &RoutingTable{
 		nodes: ttlcache.New(
-			ttlcache.WithTTL[NodeId, *Node](time.Minute * 10),
+			ttlcache.WithTTL[NodeId, Node](time.Minute * 10),
 		),
 	}
 
-	r.nodes.Start()
+	go r.nodes.Start()
 
 	return r
 }
 
-func (r *RoutingTable) Add(newnode *Node) {
+func (r *RoutingTable) Add(newnode Node) {
 	r.nodes.Set(newnode.Id, newnode, ttlcache.DefaultTTL)
 }
 
-func (r *RoutingTable) GetClosestNodes(targetId NodeId, count int) []*Node {
-	nodes := make([]*Node, 0)
+func (r *RoutingTable) GetClosestNodes(targetId NodeId, count int) []Node {
+	nodes := make([]Node, 0)
 
 	for _, item := range r.nodes.Items() {
 		node := item.Value()
