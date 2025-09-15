@@ -10,10 +10,10 @@ import (
 	"github.com/lyyyuna/zhongzi-go/pkg/types"
 )
 
-func (d *DHTServer) GetPeers(ctx context.Context, infoHash *types.Infohash) map[string]net.UDPAddr {
+func (d *DHTServer) GetPeers(ctx context.Context, infoHash *types.Infohash) map[string]*net.TCPAddr {
 	peernodes := d.routingTable.GetClosestNodes(types.NodeId(*infoHash), 20)
 
-	results := make(map[string]net.UDPAddr)
+	results := make(map[string]*net.TCPAddr)
 	knowns := make(map[types.NodeId]Node)
 
 	for {
@@ -51,7 +51,7 @@ func (d *DHTServer) GetPeers(ctx context.Context, infoHash *types.Infohash) map[
 				} else { // 如果返回的是 node
 					for _, addr := range addrs {
 						nodeCandidatesLock.Lock()
-						results[addr.String()] = addr
+						results[addr.String()] = &addr
 						nodeCandidatesLock.Unlock()
 					}
 				}

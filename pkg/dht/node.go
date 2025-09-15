@@ -60,11 +60,11 @@ func NewNodesFromBytes(raw []byte) ([]Node, error) {
 	return nodes, nil
 }
 
-func NewAddrFromByte(raw []byte) net.UDPAddr {
+func NewAddrFromByte(raw []byte) net.TCPAddr {
 	ip := net.IPv4(raw[0], raw[1], raw[2], raw[3])
 	port := binary.BigEndian.Uint16(raw[4:6])
 
-	addr := net.UDPAddr{
+	addr := net.TCPAddr{
 		IP:   ip,
 		Port: int(port),
 	}

@@ -10,7 +10,7 @@ import (
 	. "github.com/lyyyuna/zhongzi-go/pkg/types"
 )
 
-func (d *DHTServer) Bootstrap(ctx context.Context) error {
+func (d *DHTServer) Bootstrap(ctx context.Context) {
 	log.Info("Starting DHT bootstrap process")
 
 	myid := generateRandomNodeId()
@@ -25,7 +25,7 @@ func (d *DHTServer) Bootstrap(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			log.Info("Stopping DHT bootstrap")
-			return nil
+			return
 		default:
 		}
 
@@ -90,7 +90,6 @@ func (d *DHTServer) Bootstrap(ctx context.Context) error {
 	}
 
 	log.Infof("DHT bootstrap process completed with total %d nodes", len(knowns))
-	return nil
 }
 
 func generateRandomNodeId() NodeId {

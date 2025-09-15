@@ -21,6 +21,7 @@ type DHTServer struct {
 	routingTable *RoutingTable
 
 	maxBootstrapNode int
+	maxPeers         int
 
 	rpcIndex     atomic.Uint32
 	rpcLocalConn *net.UDPConn

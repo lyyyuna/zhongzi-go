@@ -136,7 +136,7 @@ type getPeersResponse struct {
 	E []string `bencode:"e,omitempty"`
 }
 
-func (d *DHTServer) getPeers(ctx context.Context, targetAddr *net.UDPAddr, targetInfoHash *types.Infohash) ([]Node, []net.UDPAddr, error) {
+func (d *DHTServer) getPeers(ctx context.Context, targetAddr *net.UDPAddr, targetInfoHash *types.Infohash) ([]Node, []net.TCPAddr, error) {
 	id := d.rpcIndex.Add(1)
 	query := getPeersQuery{
 		T: string([]byte{byte(id >> 8), byte(id)}),
@@ -172,7 +172,7 @@ func (d *DHTServer) getPeers(ctx context.Context, targetAddr *net.UDPAddr, targe
 	valuesRaw := response.R.ValuesRaw
 
 	if len(valuesRaw) != 0 {
-		values := make([]net.UDPAddr, 0)
+		values := make([]net.TCPAddr, 0)
 		for _, valueRaw := range valuesRaw {
 			values = append(values, NewAddrFromByte(valueRaw))
 		}
