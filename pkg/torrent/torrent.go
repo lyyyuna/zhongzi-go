@@ -135,12 +135,13 @@ func NewWithFile(data []byte) (*Torrent, error) {
 			if cnt_length+t.PieceLength > t.Length {
 				this_piece_length = t.Length - cnt_length
 			}
-			cnt_length += this_piece_length
 
 			var checksum Checksum
 			copy(checksum[:], tinfo.Info.Pieces[offset:offset+20])
 
 			t.Pieces = append(t.Pieces, NewTorrentPiece(offset/20, this_piece_length, cnt_length, checksum))
+
+			cnt_length += this_piece_length
 
 			offset += 20
 		}
