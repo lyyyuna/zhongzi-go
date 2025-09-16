@@ -29,7 +29,7 @@ var dhtCmd = &cobra.Command{
 
 		log.SetInfoLevel()
 
-		data, err := os.ReadFile("test.torrent")
+		data, err := os.ReadFile("ubuntu-24.10-live-server-amd64.iso.torrent")
 		if err != nil {
 			log.Fatalf("Error reading torrent file: %v", err)
 		}

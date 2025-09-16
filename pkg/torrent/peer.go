@@ -66,8 +66,17 @@ func (p *Peer) connect(ctx context.Context) error {
 
 	p.conn = conn
 
-	p.sendHandshake()
-	p.sendInterested()
+	err = p.sendHandshake()
+	if err != nil {
+		log.Errorf("send handshake to peer %s failed: %v", p.peerAddr.String(), err)
+		return err
+	}
+
+	err = p.sendInterested()
+	if err != nil {
+		log.Errorf("send interested to peer %s failed: %v", p.peerAddr.String(), err)
+		return err
+	}
 
 	p.stateStarted()
 	p.stateChoked()

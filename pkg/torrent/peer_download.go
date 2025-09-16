@@ -15,7 +15,7 @@ func (p *Peer) downloadPiece(ctx context.Context, piece *TorrentPiece) ([]byte, 
 	var buf bytes.Buffer
 
 	for _, block := range piece.Blocks {
-		ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		data, err := p.getPiece(ctx, piece.Index, block.Offset, block.Length)
 		if err != nil {
 			cancel()

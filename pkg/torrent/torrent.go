@@ -139,7 +139,20 @@ func NewWithFile(data []byte) (*Torrent, error) {
 			var checksum Checksum
 			copy(checksum[:], tinfo.Info.Pieces[offset:offset+20])
 
-			t.Pieces = append(t.Pieces, NewTorrentPiece(offset/20, this_piece_length, cnt_length, checksum))
+			piece := NewTorrentPiece(offset/20, this_piece_length, cnt_length, checksum)
+			
+			// 计算并设置文件映射关系
+			locations := t.FindPieceLocation(offset / 20)
+			for _, loc := range locations {
+				piece.FileMapping = append(piece.FileMapping, PieceFileMapping{
+					Filename:    loc.Filename,
+					StartInFile: loc.StartInFile,
+					EndInFile:   loc.EndInFile,
+					SizeInFile:  loc.SizeInFile,
+				})
+			}
+
+			t.Pieces = append(t.Pieces, piece)
 
 			cnt_length += this_piece_length
 
@@ -161,10 +174,17 @@ func (t *Torrent) FindPieceLocation(pieceIndex int) []PieceLocation {
 	pieceLocations := make([]PieceLocation, 0)
 
 	pieceStart := pieceIndex * t.PieceLength
-	pieceEnd := pieceStart + t.PieceLength - 1
+	
+	// 计算实际的 piece 长度，最后一个 piece 可能小于 t.PieceLength
+	actualPieceLength := t.PieceLength
+	if pieceStart + t.PieceLength > t.Length {
+		actualPieceLength = t.Length - pieceStart
+	}
+	pieceEnd := pieceStart + actualPieceLength - 1
 
 	firstFileIndex := -1
 
+	// 二分查找包含 pieceStart 的文件
 	low, high := 0, len(t.Files)
 	for low < high {
 		mid := (low + high) / 2
@@ -173,8 +193,8 @@ func (t *Torrent) FindPieceLocation(pieceIndex int) []PieceLocation {
 		if entry.StartOffset <= pieceStart && pieceStart <= entry.EndOffset {
 			firstFileIndex = mid
 			break
-		} else if pieceStart < mid {
-			high = mid - 1
+		} else if pieceStart < entry.StartOffset {
+			high = mid
 		} else {
 			low = mid + 1
 		}
@@ -185,7 +205,7 @@ func (t *Torrent) FindPieceLocation(pieceIndex int) []PieceLocation {
 		return nil
 	}
 
-	remainingBytes := t.PieceLength
+	remainingBytes := actualPieceLength
 	currentOffset := pieceStart
 
 	for i := firstFileIndex; i < len(t.Files); i++ {

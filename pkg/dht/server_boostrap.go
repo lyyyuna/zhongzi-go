@@ -1,8 +1,10 @@
 package dht
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"sort"
 	"sync"
 	"time"
 
@@ -59,15 +61,21 @@ func (d *DHTServer) Bootstrap(ctx context.Context) {
 		wg.Wait()
 
 		diffs := []*Node{}
-		cnt := 0
 		for id, node := range candidates {
 			if _, ok := knowns[id]; !ok {
 				diffs = append(diffs, node)
-				if cnt > 20 {
-					break
-				}
-				cnt++
 			}
+		}
+
+		sort.Slice(diffs, func(i, j int) bool {
+			idistance := diffs[i].DistanceTo(NodeId(d.Id))
+			jdistance := diffs[j].DistanceTo(NodeId(d.Id))
+
+			return bytes.Compare(idistance[:], jdistance[:]) < 0
+		})
+
+		if len(diffs) > 20 {
+			diffs = diffs[:20]
 		}
 
 		if len(diffs) != 0 {

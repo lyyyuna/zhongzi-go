@@ -4,8 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"math/rand"
-	"os"
-	"path/filepath"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	"github.com/lyyyuna/zhongzi-go/pkg/dht"
 	"github.com/lyyyuna/zhongzi-go/pkg/log"
 	"github.com/lyyyuna/zhongzi-go/pkg/types"
+	"github.com/panjf2000/ants/v2"
 )
 
 type TorrentClient struct {
@@ -74,15 +74,41 @@ func (tc *TorrentClient) Start(ctx context.Context) {
 }
 
 func (tc *TorrentClient) collectingPeers(ctx context.Context) {
-	dht := dht.NewDHTServer(dht.WithMaxBootstrapNodes(20))
+	dht := dht.NewDHTServer(dht.WithMaxBootstrapNodes(100))
 	dht.Run()
 
 	for {
 		tc.availablePeersLock.Lock()
 		peersCnt := len(tc.availablePeers)
+
+		allRemotePieces := make(map[int]int)
+		for _, peer := range tc.availablePeers {
+			for pieceIndex := range peer.remotePieces {
+				if allRemotePieces[pieceIndex] == 0 {
+					allRemotePieces[pieceIndex] = 1
+				} else {
+					allRemotePieces[pieceIndex]++
+				}
+			}
+		}
+
+		needBootstrap := false
+		for i := range tc.torrent.Pieces {
+			if cnt, ok := allRemotePieces[i]; !ok {
+				needBootstrap = true
+				log.Infof("piece %v not available, need collecting new peers...", i)
+			} else {
+				if cnt == 1 {
+					needBootstrap = true
+					log.Infof("piece %v peer too little, only 1, need collecting new peers...", i)
+				}
+			}
+		}
+
 		tc.availablePeersLock.Unlock()
-		if peersCnt > 15 {
-			log.Infof("available peers is sufficient: %v, skipping dht bootstrap.", peersCnt)
+
+		if peersCnt > 15 && !needBootstrap {
+			log.Infof("available peers is sufficient: %v, all piece available: %v, skipping dht bootstrap.", peersCnt, needBootstrap)
 			time.Sleep(10 * time.Second)
 			continue
 		}
@@ -94,23 +120,46 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 		peers := dht.GetPeers(ctx, tc.infoHash)
 		log.Infof("found %v peers from DHT", len(peers))
 
-		for _, peerAddr := range peers {
-			peer := newPeer(tc.id, tc.infoHash, peerAddr, len(tc.torrent.Pieces))
-
-			err := peer.connect(ctx)
-			if err != nil {
-				log.Errorf("skip, connect to peer %s failed: %v", peerAddr.String(), err)
+		diffs := make(map[string]*net.TCPAddr)
+		for key, peerAddr := range peers {
+			if tc.isPeerInAvailablePeers(peerAddr) {
 				continue
 			}
+			diffs[key] = peerAddr
+		}
 
-			go peer.run()
+		pool, _ := ants.NewPool(20)
 
-			tc.availablePeersLock.Lock()
-			tc.availablePeers = append(tc.availablePeers, peer)
-			tc.availablePeersLock.Unlock()
-			log.Infof("try to connect to peer 2 %s", peerAddr.String())
+		for _, peerAddr := range diffs {
+			pool.Submit(func() {
+				peer := newPeer(tc.id, tc.infoHash, peerAddr, len(tc.torrent.Pieces))
+
+				err := peer.connect(ctx)
+				if err != nil {
+					log.Errorf("skip, connect to peer %s failed: %v", peerAddr.String(), err)
+					return
+				}
+
+				go peer.run()
+
+				tc.availablePeersLock.Lock()
+				tc.availablePeers = append(tc.availablePeers, peer)
+				tc.availablePeersLock.Unlock()
+			})
 		}
 	}
+}
+
+func (tc *TorrentClient) isPeerInAvailablePeers(targetPeer *net.TCPAddr) bool {
+	tc.availablePeersLock.Lock()
+	defer tc.availablePeersLock.Unlock()
+
+	for _, peer := range tc.availablePeers {
+		if peer.peerAddr.String() == targetPeer.String() {
+			return true
+		}
+	}
+	return false
 }
 
 func (tc *TorrentClient) pieceGenerator() {
@@ -136,7 +185,7 @@ func (tc *TorrentClient) download(ctx context.Context) {
 	go tc.pieceGenerator()
 
 	var wg sync.WaitGroup
-	for i := range 30 {
+	for i := range 100 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -154,7 +203,7 @@ func (tc *TorrentClient) downloadPieceWorker(ctx context.Context, workerIndex in
 			log.Errorf("peer %v download piece %v error: %v", peer.peerAddr, piece.Index, err)
 			tc.availablePeersLock.Lock()
 			for i, ipeer := range tc.availablePeers {
-				if ipeer == peer {
+				if ipeer.peerAddr.String() == peer.peerAddr.String() {
 					// 删除第i个元素
 					tc.availablePeers = append(tc.availablePeers[:i], tc.availablePeers[i+1:]...)
 					break
@@ -189,6 +238,7 @@ func (tc *TorrentClient) choosePeer(pieceIndex int) *Peer {
 
 			if peer.hasPiece(pieceIndex) {
 				tc.availablePeersLock.Unlock()
+				log.Infof("choose peer %v for piece %v", peer.peerAddr, pieceIndex)
 				return peer
 			}
 		}
@@ -198,51 +248,4 @@ func (tc *TorrentClient) choosePeer(pieceIndex int) *Peer {
 		log.Infof("no available peer for piece %v, retrying...", pieceIndex)
 		time.Sleep(10 * time.Second)
 	}
-}
-
-func (tc *TorrentClient) fileSaver(ctx context.Context) error {
-	downloadedPiece := 0
-
-	f, err := os.OpenFile(filepath.Join(tc.downloadPath, tc.torrent.Name), os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		log.Errorf("open file failed: %v", err)
-		return err
-	}
-
-	for piece := range tc.pieceFileQueue {
-		select {
-		case <-ctx.Done():
-			log.Infof("file saver shutdown")
-			return ctx.Err()
-		default:
-		}
-
-		_, err := f.Seek(int64(piece.Index*tc.torrent.PieceLength), 0)
-		if err != nil {
-			log.Errorf("seek file failed: %v", err)
-			return err
-		}
-
-		_, err = f.Write(piece.Data)
-		if err != nil {
-			log.Errorf("write file failed: %v", err)
-			return err
-		}
-
-		err = f.Sync()
-		if err != nil {
-			log.Errorf("sync file failed: %v", err)
-			return err
-		}
-
-		log.Infof("piece %v saved, %v/%v", piece.Index, downloadedPiece, len(tc.torrent.Pieces))
-
-		downloadedPiece++
-		if downloadedPiece == len(tc.torrent.Pieces) {
-			log.Infof("download completed")
-			return nil
-		}
-	}
-
-	return nil
 }

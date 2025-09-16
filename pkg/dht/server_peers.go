@@ -1,8 +1,10 @@
 package dht
 
 import (
+	"bytes"
 	"context"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
@@ -61,15 +63,21 @@ func (d *DHTServer) GetPeers(ctx context.Context, infoHash *types.Infohash) map[
 		wg.Wait()
 
 		diffs := []Node{}
-		cnt := 0
 		for id, node := range nodeCandidates {
 			if _, ok := knowns[id]; !ok {
 				diffs = append(diffs, node)
-				cnt++
-				if cnt > 20 {
-					break
-				}
 			}
+		}
+
+		sort.Slice(diffs, func(i, j int) bool {
+			idistance := diffs[i].DistanceTo(types.NodeId(*infoHash))
+			jdistance := diffs[j].DistanceTo(types.NodeId(*infoHash))
+
+			return bytes.Compare(idistance[:], jdistance[:]) < 0
+		})
+
+		if len(diffs) > 20 {
+			diffs = diffs[:20]
 		}
 
 		if len(diffs) > 0 {
