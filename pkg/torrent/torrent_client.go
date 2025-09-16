@@ -2,11 +2,8 @@ package torrent
 
 import (
 	"context"
-	"encoding/hex"
 	"math/rand"
 	"net"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,14 +38,7 @@ func WithDownloadPath(path string) o {
 }
 
 func NewTorrentClient(torrent *Torrent, opts ...o) *TorrentClient {
-	digits := make([]string, 12)
-	for i := range digits {
-		digits[i] = strconv.Itoa(rand.Intn(10))
-	}
-
-	var result [20]byte
-	hex.Decode(result[:], []byte("-PC0001-"+strings.Join(digits, "")))
-	id := types.Infohash(result)
+	id := types.Infohash(calculatePeerID())
 	tc := &TorrentClient{
 		id:                 &id,
 		infoHash:           &torrent.InfoHash,
@@ -63,6 +53,17 @@ func NewTorrentClient(torrent *Torrent, opts ...o) *TorrentClient {
 	}
 
 	return tc
+}
+
+func calculatePeerID() [20]byte {
+	var peerID [20]byte
+	copy(peerID[:], "-PC0001-")
+
+	for i := 8; i < 20; i++ {
+		peerID[i] = byte('0' + rand.Intn(10))
+	}
+
+	return peerID
 }
 
 func (tc *TorrentClient) Start(ctx context.Context) {

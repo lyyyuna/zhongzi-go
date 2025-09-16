@@ -15,7 +15,7 @@ func (p *Peer) downloadPiece(ctx context.Context, piece *TorrentPiece) ([]byte, 
 	var buf bytes.Buffer
 
 	for _, block := range piece.Blocks {
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		data, err := p.getPiece(ctx, piece.Index, block.Offset, block.Length)
 		if err != nil {
 			cancel()
@@ -45,7 +45,7 @@ func (p *Peer) downloadPiece(ctx context.Context, piece *TorrentPiece) ([]byte, 
 func (p *Peer) getPiece(ctx context.Context, pieceIndex int, offset int, length int) ([]byte, error) {
 	data := MakeRequestMessage(pieceIndex, offset, length).Encode()
 
-	log.Debugf("send request message to peer %s, piece_index=%v, offset=%v, length=%v", p.peerAddr, pieceIndex, offset, length)
+	log.Infof("send request message to peer %s, piece_index=%v, offset=%v, length=%v", p.peerAddr, pieceIndex, offset, length)
 
 	ch := make(chan []byte, 1)
 	p.piecePendingsL.Lock()
