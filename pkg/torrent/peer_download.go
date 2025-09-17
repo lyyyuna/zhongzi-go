@@ -12,7 +12,7 @@ import (
 )
 
 func (p *Peer) IsBusy() bool {
-	return len(p.downloadSema) > 4
+	return len(p.downloadSema) > 6
 }
 
 func (p *Peer) downloadPiece(ctx context.Context, piece *TorrentPiece) ([]byte, error) {

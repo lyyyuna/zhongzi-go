@@ -55,7 +55,7 @@ func newPeer(peerId *types.Infohash, infoHash *types.Infohash, peerAddr *net.TCP
 		peerAddr:      peerAddr,
 		remotePieces:  make(map[int]bool, pieceCnt),
 		piecePendings: make(map[string]chan []byte),
-		downloadSema:  make(chan struct{}, 5),
+		downloadSema:  make(chan struct{}, 7),
 	}
 }
 

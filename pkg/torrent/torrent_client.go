@@ -27,6 +27,8 @@ type TorrentClient struct {
 	pieceFileQueue     chan *TorrentPiece
 
 	downloadPath string
+	
+	stats *TorrentStats
 }
 
 type o func(tc *TorrentClient)
@@ -66,12 +68,12 @@ func calculatePeerID() [20]byte {
 	return peerID
 }
 
-func (tc *TorrentClient) Start(ctx context.Context) {
+func (tc *TorrentClient) Run(ctx context.Context) error {
 	go tc.collectingPeers(ctx)
 
 	go tc.download(ctx)
 
-	tc.fileSaver(ctx)
+	return tc.fileSaver(ctx)
 }
 
 func (tc *TorrentClient) collectingPeers(ctx context.Context) {
@@ -208,6 +210,10 @@ func (tc *TorrentClient) downloadPieceWorker(ctx context.Context, workerIndex in
 
 		log.Infof("[worker %v] downloaded piece %v from peer %v", workerIndex, piece.Index, peer.peerAddr)
 		piece.Data = downloadData
+
+		if tc.stats != nil {
+			tc.stats.updatePieceDownloaded(piece.Index, piece.Length)
+		}
 
 		tc.pieceFileQueue <- piece
 	}
