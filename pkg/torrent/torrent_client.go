@@ -21,7 +21,7 @@ type TorrentClient struct {
 	torrent *Torrent
 
 	availablePeersLock sync.Mutex
-	availablePeers     []*Peer
+	availablePeers     map[string]*Peer
 
 	pieceDownloadQueue chan *TorrentPiece
 	pieceFileQueue     chan *TorrentPiece
@@ -43,7 +43,7 @@ func NewTorrentClient(torrent *Torrent, opts ...o) *TorrentClient {
 		id:                 &id,
 		infoHash:           &torrent.InfoHash,
 		torrent:            torrent,
-		availablePeers:     make([]*Peer, 0),
+		availablePeers:     make(map[string]*Peer),
 		pieceDownloadQueue: make(chan *TorrentPiece, len(torrent.Pieces)),
 		pieceFileQueue:     make(chan *TorrentPiece, 1),
 	}
@@ -144,7 +144,7 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 				go peer.run()
 
 				tc.availablePeersLock.Lock()
-				tc.availablePeers = append(tc.availablePeers, peer)
+				tc.availablePeers[peerAddr.String()] = peer
 				tc.availablePeersLock.Unlock()
 			})
 		}
@@ -202,16 +202,7 @@ func (tc *TorrentClient) downloadPieceWorker(ctx context.Context, workerIndex in
 		downloadData, err := peer.downloadPiece(ctx, piece)
 		if err != nil {
 			log.Errorf("peer %v download piece %v error: %v", peer.peerAddr, piece.Index, err)
-			tc.availablePeersLock.Lock()
-			for i, ipeer := range tc.availablePeers {
-				if ipeer.peerAddr.String() == peer.peerAddr.String() {
-					// 删除第i个元素
-					tc.availablePeers = append(tc.availablePeers[:i], tc.availablePeers[i+1:]...)
-					break
-				}
-			}
-			tc.availablePeersLock.Unlock()
-			tc.pieceDownloadQueue <- piece
+			tc.removeFromAvailablePeers(peer)
 			continue
 		}
 
@@ -228,11 +219,19 @@ func (tc *TorrentClient) choosePeer(pieceIndex int) *Peer {
 	for {
 		tc.availablePeersLock.Lock()
 
-		rand.Shuffle(len(tc.availablePeers), func(i, j int) {
-			tc.availablePeers[i], tc.availablePeers[j] = tc.availablePeers[j], tc.availablePeers[i]
+		// 将map中的peer存入切片
+		peers := make([]*Peer, 0, len(tc.availablePeers))
+		for _, peer := range tc.availablePeers {
+			peers = append(peers, peer)
+		}
+
+		// 随机打乱切片顺序
+		rand.Shuffle(len(peers), func(i, j int) {
+			peers[i], peers[j] = peers[j], peers[i]
 		})
 
-		for _, peer := range tc.availablePeers {
+		// 按照随机顺序遍历
+		for _, peer := range peers {
 			if !peer.canDownload() {
 				continue
 			}
@@ -248,5 +247,16 @@ func (tc *TorrentClient) choosePeer(pieceIndex int) *Peer {
 
 		log.Infof("no available peer for piece %v, retrying...", pieceIndex)
 		time.Sleep(10 * time.Second)
+	}
+}
+
+func (tc *TorrentClient) removeFromAvailablePeers(peer *Peer) {
+	tc.availablePeersLock.Lock()
+	defer tc.availablePeersLock.Unlock()
+
+	for key := range tc.availablePeers {
+		if key == peer.peerAddr.String() {
+			delete(tc.availablePeers, key)
+		}
 	}
 }
