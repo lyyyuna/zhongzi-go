@@ -236,6 +236,10 @@ func (tc *TorrentClient) choosePeer(pieceIndex int) *Peer {
 				continue
 			}
 
+			if peer.IsBusy() {
+				continue
+			}
+
 			if peer.hasPiece(pieceIndex) {
 				tc.availablePeersLock.Unlock()
 				log.Infof("choose peer %v for piece %v", peer.peerAddr, pieceIndex)

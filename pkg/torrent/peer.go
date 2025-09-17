@@ -44,6 +44,8 @@ type Peer struct {
 
 	piecePendings  map[string]chan []byte
 	piecePendingsL sync.Mutex
+
+	downloadSema chan struct{}
 }
 
 func newPeer(peerId *types.Infohash, infoHash *types.Infohash, peerAddr *net.TCPAddr, pieceCnt int) *Peer {
@@ -53,6 +55,7 @@ func newPeer(peerId *types.Infohash, infoHash *types.Infohash, peerAddr *net.TCP
 		peerAddr:      peerAddr,
 		remotePieces:  make(map[int]bool, pieceCnt),
 		piecePendings: make(map[string]chan []byte),
+		downloadSema:  make(chan struct{}, 5),
 	}
 }
 

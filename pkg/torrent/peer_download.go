@@ -11,12 +11,18 @@ import (
 	"github.com/lyyyuna/zhongzi-go/pkg/log"
 )
 
+func (p *Peer) IsBusy() bool {
+	return len(p.downloadSema) > 4
+}
+
 func (p *Peer) downloadPiece(ctx context.Context, piece *TorrentPiece) ([]byte, error) {
 	var buf bytes.Buffer
 
 	for _, block := range piece.Blocks {
+		p.downloadSema <- struct{}{}
 		ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 		data, err := p.getPiece(ctx, piece.Index, block.Offset, block.Length)
+		<-p.downloadSema
 		if err != nil {
 			cancel()
 			log.Errorf("get piece failed: %v", err)
