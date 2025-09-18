@@ -26,7 +26,7 @@ func NewRoutingTable() *RoutingTable {
 }
 
 func (r *RoutingTable) Add(newnode Node) {
-	r.nodes.Set(newnode.Id, newnode, ttlcache.DefaultTTL)
+	r.nodes.Set(newnode.Id, newnode, time.Minute*10)
 }
 
 func (r *RoutingTable) GetClosestNodes(targetId NodeId, count int) []Node {

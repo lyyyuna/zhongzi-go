@@ -51,13 +51,13 @@ func (p *Peer) downloadPiece(ctx context.Context, piece *TorrentPiece) ([]byte, 
 func (p *Peer) getPiece(ctx context.Context, pieceIndex int, offset int, length int) ([]byte, error) {
 	data := MakeRequestMessage(pieceIndex, offset, length).Encode()
 
-	log.Infof("send request message to peer %s, piece_index=%v, offset=%v, length=%v", p.peerAddr, pieceIndex, offset, length)
-
 	ch := make(chan []byte, 1)
 	p.piecePendingsL.Lock()
 	index := fmt.Sprintf("%v-%v", pieceIndex, offset)
 	p.piecePendings[index] = ch
 	p.piecePendingsL.Unlock()
+
+	log.Infof("send request message to peer %s, piece_index=%v, offset=%v, length=%v", p.peerAddr, pieceIndex, offset, length)
 
 	_, err := p.conn.Write(data)
 	if err != nil {
@@ -75,6 +75,12 @@ func (p *Peer) getPiece(ctx context.Context, pieceIndex int, offset int, length 
 		delete(p.piecePendings, index)
 		p.piecePendingsL.Unlock()
 		return nil, ctx.Err()
+
+	case <-p.closeCh:
+		p.piecePendingsL.Lock()
+		delete(p.piecePendings, index)
+		p.piecePendingsL.Unlock()
+		return nil, errors.New("peer connection closed")
 
 	case resp := <-ch:
 		return resp, nil

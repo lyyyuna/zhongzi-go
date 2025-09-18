@@ -116,7 +116,7 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 
 		tc.availablePeersLock.Unlock()
 
-		if peersCnt > 15 && !needBootstrap {
+		if peersCnt > 5 && !needBootstrap {
 			log.Infof("available peers is sufficient: %v, all piece available: %v, skipping dht bootstrap.", peersCnt, needBootstrap)
 			tc.setDHTCollecting(false)
 			time.Sleep(10 * time.Second)
@@ -219,6 +219,7 @@ func (tc *TorrentClient) downloadPieceWorker(ctx context.Context, workerIndex in
 		downloadData, err := peer.downloadPiece(ctx, piece)
 		if err != nil {
 			log.Errorf("peer %v download piece %v error: %v", peer.peerAddr, piece.Index, err)
+			peer.Close()
 			tc.removeFromAvailablePeers(peer)
 			continue
 		}
