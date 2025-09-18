@@ -140,7 +140,9 @@ func (ui *DownloadUI) updateProgressBar(stats *torrent.TorrentStats) {
 	downloaded := formatBytes(stats.DownloadedSize)
 	total := formatBytes(stats.TotalSize)
 	
-	barWidth := 50
+	_, _, width, _ := ui.progressBar.GetRect()
+	barWidth := max(width-4, 10) // Account for border and padding
+	
 	filledWidth := int(progress * float64(barWidth) / 100)
 	emptyWidth := barWidth - filledWidth
 	
@@ -155,7 +157,9 @@ func (ui *DownloadUI) updateProgressBar(stats *torrent.TorrentStats) {
 }
 
 func (ui *DownloadUI) updatePieceView(stats *torrent.TorrentStats) {
-	const piecesPerRow = 50
+	_, _, width, _ := ui.pieceView.GetRect()
+	piecesPerRow := max(width-4, 10) // Account for border and padding
+	
 	var pieceDisplay strings.Builder
 	
 	pieceDisplay.WriteString(fmt.Sprintf("Downloaded: %d/%d pieces\n\n",

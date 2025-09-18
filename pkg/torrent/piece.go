@@ -39,7 +39,8 @@ func NewTorrentPiece(index, length, offset int, checksum Checksum) TorrentPiece 
 	}
 
 	blockIndex := 0
-	blockLength := 2 << 14
+	blockLength := 2 << 16
+
 	for blockIndex*blockLength+blockLength < length {
 		p.Blocks = append(p.Blocks, TorrentBlock{
 			Index:  blockIndex,
