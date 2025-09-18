@@ -85,8 +85,14 @@ func (ui *DownloadUI) Start() error {
 	go func() {
 		err := ui.torrentClient.Run(ui.ctx)
 		if err != nil {
-			ui.app.Stop()
+			ui.showError(fmt.Sprintf("Download failed: %v", err))
+		} else {
+			ui.showCompleted()
 		}
+		
+		// Wait a bit for user to see the final message, then exit
+		time.Sleep(3 * time.Second)
+		ui.app.Stop()
 	}()
 	
 	return ui.app.Run()
@@ -229,4 +235,25 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%02d:%02d:%02d", hours, minutes, seconds)
 	}
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
+}
+
+func (ui *DownloadUI) showCompleted() {
+	ui.app.QueueUpdateDraw(func() {
+		stats := ui.torrentClient.Stats()
+		completionText := fmt.Sprintf("✓ Download Completed!\n\nFile: %s\nSize: %s\nTime: %s\n\nApplication will close in 3 seconds...",
+			stats.Name,
+			formatBytes(stats.TotalSize),
+			formatDuration(time.Since(stats.StartTime)))
+		
+		ui.speedText.SetText(completionText)
+		ui.speedText.SetTitle("Download Complete")
+	})
+}
+
+func (ui *DownloadUI) showError(message string) {
+	ui.app.QueueUpdateDraw(func() {
+		errorText := fmt.Sprintf("✗ %s\n\nApplication will close in 3 seconds...", message)
+		ui.speedText.SetText(errorText)
+		ui.speedText.SetTitle("Error")
+	})
 }
