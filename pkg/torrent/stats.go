@@ -12,7 +12,8 @@ type TorrentStats struct {
 	TotalSize      int64
 	PieceCount     int
 	PieceLength    int
-	DownloadedSize int64
+	DownloadedSize int64  // Actual completed piece data for progress
+	TotalBytesRead int64  // Total bytes downloaded including retries for speed calculation
 	Progress       float64
 	DownloadSpeed  int64
 	UploadSpeed    int64
@@ -51,13 +52,17 @@ func newTorrentStats(tc *TorrentClient) *TorrentStats {
 	}
 }
 
+func (ts *TorrentStats) updateBlockDownloaded(blockSize int) {
+	ts.TotalBytesRead += int64(blockSize)
+	ts.updateDownloadSpeed(int64(blockSize))
+}
+
 func (ts *TorrentStats) updatePieceDownloaded(pieceIndex int, pieceSize int) {
 	if pieceIndex >= 0 && pieceIndex < len(ts.Downloaded) {
 		if !ts.Downloaded[pieceIndex] {
 			ts.Downloaded[pieceIndex] = true
 			ts.DownloadedSize += int64(pieceSize)
 			ts.updateProgress()
-			ts.updateDownloadSpeed(int64(pieceSize))
 		}
 	}
 }
@@ -91,10 +96,29 @@ func (ts *TorrentStats) updateDownloadSpeed(bytes int64) {
 	
 	if len(ts.recentSpeeds) > 0 {
 		totalBytes := int64(0)
-		for _, sample := range ts.recentSpeeds {
+		var earliest, latest time.Time
+		
+		for i, sample := range ts.recentSpeeds {
 			totalBytes += sample.bytes
+			if i == 0 {
+				earliest = sample.time
+				latest = sample.time
+			} else {
+				if sample.time.Before(earliest) {
+					earliest = sample.time
+				}
+				if sample.time.After(latest) {
+					latest = sample.time
+				}
+			}
 		}
-		ts.DownloadSpeed = totalBytes / 5 
+		
+		timeSpan := latest.Sub(earliest).Seconds()
+		if timeSpan <= 0 {
+			timeSpan = 1.0 // 至少按1秒计算
+		}
+		
+		ts.DownloadSpeed = int64(float64(totalBytes) / timeSpan)
 	}
 }
 

@@ -31,6 +31,11 @@ func (p *Peer) downloadPiece(ctx context.Context, piece *TorrentPiece) ([]byte, 
 		cancel()
 
 		buf.Write(data)
+		
+		// Update speed statistics for each block downloaded
+		if p.client != nil && p.client.stats != nil {
+			p.client.stats.updateBlockDownloaded(len(data))
+		}
 	}
 
 	pieceData := buf.Bytes()
