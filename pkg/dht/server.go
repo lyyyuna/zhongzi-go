@@ -69,6 +69,12 @@ func WithMaxBootstrapNodes(max int) option {
 	}
 }
 
+func WithMaxPeers(max int) option {
+	return func(d *DHTServer) {
+		d.maxPeers = max
+	}
+}
+
 func (d *DHTServer) Run() error {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{
 		IP:   net.IPv4zero,

@@ -80,7 +80,7 @@ func (tc *TorrentClient) Run(ctx context.Context) error {
 }
 
 func (tc *TorrentClient) collectingPeers(ctx context.Context) {
-	dht := dht.NewDHTServer(dht.WithMaxBootstrapNodes(100))
+	dht := dht.NewDHTServer(dht.WithMaxBootstrapNodes(50), dht.WithMaxPeers(50))
 	dht.Run()
 
 	// Start with DHT collecting to show initial status
@@ -92,6 +92,9 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 
 		allRemotePieces := make(map[int]int)
 		for _, peer := range tc.availablePeers {
+			if !peer.canDownload() {
+				continue
+			}
 			for pieceIndex := range peer.remotePieces {
 				if allRemotePieces[pieceIndex] == 0 {
 					allRemotePieces[pieceIndex] = 1
@@ -103,14 +106,9 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 
 		needBootstrap := false
 		for i := range tc.torrent.Pieces {
-			if cnt, ok := allRemotePieces[i]; !ok {
+			if _, ok := allRemotePieces[i]; !ok {
 				needBootstrap = true
 				log.Infof("piece %v not available, need collecting new peers...", i)
-			} else {
-				if cnt == 1 {
-					needBootstrap = true
-					log.Infof("piece %v peer too little, only 1, need collecting new peers...", i)
-				}
 			}
 		}
 
@@ -132,9 +130,6 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 		log.Infof("found %v peers from DHT", len(peers))
 
 		tc.setDHTCollecting(false)
-
-		// Give UI time to show DHT collecting status
-		time.Sleep(1 * time.Second)
 
 		diffs := make(map[string]*net.TCPAddr)
 		for key, peerAddr := range peers {
@@ -219,6 +214,7 @@ func (tc *TorrentClient) downloadPieceWorker(ctx context.Context, workerIndex in
 		downloadData, err := peer.downloadPiece(ctx, piece)
 		if err != nil {
 			log.Errorf("peer %v download piece %v error: %v", peer.peerAddr, piece.Index, err)
+			tc.pieceDownloadQueue <- piece
 			peer.Close()
 			tc.removeFromAvailablePeers(peer)
 			continue

@@ -80,6 +80,11 @@ func (d *DHTServer) GetPeers(ctx context.Context, infoHash *types.Infohash) map[
 			diffs = diffs[:20]
 		}
 
+		if d.maxPeers > 0 && len(results) > d.maxPeers {
+			log.Info("Reached maximum number of peers")
+			return results
+		}
+
 		if len(diffs) > 0 {
 			log.Infof("Found %d new diff nodes", len(diffs))
 			peernodes = diffs
