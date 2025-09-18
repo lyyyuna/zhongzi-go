@@ -251,6 +251,7 @@ func (p *Peer) heartbeatLoop(ctx context.Context) {
 			log.Errorf("send keep alive to peer %s failed: %v", p.peerAddr.String(), err)
 			return
 		}
+		log.Infof("sent keep alive to peer %s", p.peerAddr.String())
 
 		time.Sleep(60 * time.Second)
 	}
