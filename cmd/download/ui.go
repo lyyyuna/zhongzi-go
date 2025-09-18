@@ -57,7 +57,7 @@ func (ui *DownloadUI) setupUI() {
 	ui.speedText.SetBorder(true).SetTitle("Speed & Statistics")
 	
 	grid := tview.NewGrid().
-		SetRows(3, 3, 0, 4).
+		SetRows(3, 3, 0, 6).
 		SetColumns(0, 0).
 		SetBorders(false)
 	
@@ -185,9 +185,15 @@ func (ui *DownloadUI) updateSpeedText(stats *torrent.TorrentStats) {
 	remainingTime := stats.GetRemainingTime()
 	elapsed := time.Since(stats.StartTime)
 	
-	speedInfo := fmt.Sprintf("Download Speed: %s/s\nPeers: %d\nElapsed: %s\nRemaining: %s",
+	dhtStatus := "💤 Idle"
+	if stats.DHTCollecting {
+		dhtStatus = "🔍 Collecting Peers"
+	}
+	
+	speedInfo := fmt.Sprintf("Download Speed: %s/s\nPeers: %d\nDHT: %s\nElapsed: %s\nRemaining: %s",
 		formatBytes(speed),
 		stats.PeersCount,
+		dhtStatus,
 		formatDuration(elapsed),
 		formatDuration(remainingTime))
 	

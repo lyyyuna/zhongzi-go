@@ -27,8 +27,11 @@ type TorrentClient struct {
 	pieceFileQueue     chan *TorrentPiece
 
 	downloadPath string
-	
+
 	stats *TorrentStats
+
+	dhtCollectingLock sync.RWMutex
+	dhtCollecting     bool
 }
 
 type o func(tc *TorrentClient)
@@ -80,6 +83,9 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 	dht := dht.NewDHTServer(dht.WithMaxBootstrapNodes(100))
 	dht.Run()
 
+	// Start with DHT collecting to show initial status
+	tc.setDHTCollecting(true)
+
 	for {
 		tc.availablePeersLock.Lock()
 		peersCnt := len(tc.availablePeers)
@@ -112,16 +118,23 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 
 		if peersCnt > 15 && !needBootstrap {
 			log.Infof("available peers is sufficient: %v, all piece available: %v, skipping dht bootstrap.", peersCnt, needBootstrap)
+			tc.setDHTCollecting(false)
 			time.Sleep(10 * time.Second)
 			continue
 		}
 
 		log.Infof("collecting peers from DHT...")
+		tc.setDHTCollecting(true)
 
 		dht.Bootstrap(ctx)
 
 		peers := dht.GetPeers(ctx, tc.infoHash)
 		log.Infof("found %v peers from DHT", len(peers))
+
+		tc.setDHTCollecting(false)
+
+		// Give UI time to show DHT collecting status
+		time.Sleep(1 * time.Second)
 
 		diffs := make(map[string]*net.TCPAddr)
 		for key, peerAddr := range peers {
@@ -135,7 +148,7 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 
 		for _, peerAddr := range diffs {
 			pool.Submit(func() {
-				peer := newPeer(tc.id, tc.infoHash, peerAddr, len(tc.torrent.Pieces))
+				peer := newPeer(tc.id, tc.infoHash, peerAddr, len(tc.torrent.Pieces), tc)
 
 				err := peer.connect(ctx)
 				if err != nil {
@@ -150,6 +163,8 @@ func (tc *TorrentClient) collectingPeers(ctx context.Context) {
 				tc.availablePeersLock.Unlock()
 			})
 		}
+
+		pool.Release()
 	}
 }
 
@@ -269,4 +284,16 @@ func (tc *TorrentClient) removeFromAvailablePeers(peer *Peer) {
 			delete(tc.availablePeers, key)
 		}
 	}
+}
+
+func (tc *TorrentClient) setDHTCollecting(collecting bool) {
+	tc.dhtCollectingLock.Lock()
+	defer tc.dhtCollectingLock.Unlock()
+	tc.dhtCollecting = collecting
+}
+
+func (tc *TorrentClient) isDHTCollecting() bool {
+	tc.dhtCollectingLock.RLock()
+	defer tc.dhtCollectingLock.RUnlock()
+	return tc.dhtCollecting
 }

@@ -19,6 +19,7 @@ type TorrentStats struct {
 	PeersCount     int
 	Downloaded     []bool
 	StartTime      time.Time
+	DHTCollecting  bool
 	
 	downloadSpeedLock  sync.RWMutex
 	downloadBytes      int64
@@ -113,6 +114,10 @@ func (ts *TorrentStats) updatePeersCount(count int) {
 	ts.PeersCount = count
 }
 
+func (ts *TorrentStats) updateDHTCollecting(collecting bool) {
+	ts.DHTCollecting = collecting
+}
+
 func (ts *TorrentStats) GetDownloadedPieceCount() int {
 	count := 0
 	for _, downloaded := range ts.Downloaded {
@@ -149,6 +154,8 @@ func (tc *TorrentClient) Stats() *TorrentStats {
 	tc.availablePeersLock.Lock()
 	tc.stats.updatePeersCount(len(tc.availablePeers))
 	tc.availablePeersLock.Unlock()
+	
+	tc.stats.updateDHTCollecting(tc.isDHTCollecting())
 	
 	return tc.stats
 }

@@ -46,9 +46,12 @@ type Peer struct {
 	piecePendingsL sync.Mutex
 
 	downloadSema chan struct{}
+	
+	// Reference to parent client for cleanup
+	client *TorrentClient
 }
 
-func newPeer(peerId *types.Infohash, infoHash *types.Infohash, peerAddr *net.TCPAddr, pieceCnt int) *Peer {
+func newPeer(peerId *types.Infohash, infoHash *types.Infohash, peerAddr *net.TCPAddr, pieceCnt int, client *TorrentClient) *Peer {
 	return &Peer{
 		peerId:        peerId,
 		infoHash:      infoHash,
@@ -56,6 +59,7 @@ func newPeer(peerId *types.Infohash, infoHash *types.Infohash, peerAddr *net.TCP
 		remotePieces:  make(map[int]bool, pieceCnt),
 		piecePendings: make(map[string]chan []byte),
 		downloadSema:  make(chan struct{}, 7),
+		client:        client,
 	}
 }
 
@@ -219,6 +223,12 @@ func (p *Peer) hasPiece(pieceIndex int) bool {
 }
 
 func (p *Peer) heartbeatLoop(ctx context.Context) {
+	defer func() {
+		if p.client != nil {
+			p.client.removeFromAvailablePeers(p)
+		}
+	}()
+	
 	for {
 		if !p.isStateRunning() {
 			time.Sleep(10 * time.Second)
@@ -256,6 +266,12 @@ func (p *Peer) sendKeepAlive() error {
 }
 
 func (p *Peer) run() {
+	defer func() {
+		if p.client != nil {
+			p.client.removeFromAvailablePeers(p)
+		}
+	}()
+	
 	for {
 		buf := make([]byte, 4)
 		_, err := io.ReadFull(p.conn, buf)
@@ -264,7 +280,7 @@ func (p *Peer) run() {
 			return
 		} else if err != nil {
 			log.Errorf("read peer message length failed: %v", err)
-			continue
+			return
 		}
 
 		length := binary.BigEndian.Uint32(buf)
@@ -277,9 +293,10 @@ func (p *Peer) run() {
 		_, err = io.ReadFull(p.conn, buf)
 		if err == io.EOF {
 			log.Infof("peer %s closed", p.peerAddr.String())
+			return
 		} else if err != nil {
 			log.Errorf("read peer message type failed: %v", err)
-			continue
+			return
 		}
 
 		id := int(buf[0])
@@ -292,7 +309,7 @@ func (p *Peer) run() {
 				return
 			} else if err != nil {
 				log.Errorf("read peer message data failed: %v", err)
-				continue
+				return
 			}
 		}
 
